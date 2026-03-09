@@ -1,0 +1,27 @@
+# Claude Code local settings
+.claude/
+
+# Visual Studio build output
+x64/
+Debug/
+Release/
+*.user
+*.suo
+*.aps
+*.ncb
+*.sdf
+*.opensdf
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.obj
+*.iobj
+*.ipdb
+*.tlog/
+*.lastbuildstate
+*.res
+
+# Windows
+Thumbs.db
+Desktop.ini
