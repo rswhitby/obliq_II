@@ -3,11 +3,12 @@ Obliq plug-in for Rhinoceros®. Provides utilities for working with oblique (mil
 
 ![Project Screenshot](screenshot.PNG)
 
+> **This is a fork of [criticalsoftware-lab/obliq](https://github.com/criticalsoftware-lab/obliq).** The original military oblique viewport and Make2D commands were built by Critical Software Lab. This fork extends that work with cavalier oblique projection support (selectable elevation plane, angle, and scale).
+
 # Installation (windows)
-1. Download RHP file from [https://github.com/criticalsoftware-lab/obliq/releases]
-2. Place in your Rhino 8 installation folder (C:\Program Files\Rhino 8\Plug-ins\)
-3. Make sure you have the latest Rhino 8 service release.
-4. Drag the RHP file from the Plug-ins folder into the Rhino viewport.
+1. Download `Obliq.rhp` from the [latest release](https://github.com/rswhitby/obliq/releases/tag/v0.3.0-beta)
+2. Make sure you have the latest Rhino 8 service release.
+3. Drag the RHP file into the Rhino viewport.
 
 # Usage
 **Commands:**
