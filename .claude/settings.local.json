@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/rswhi/**)",
+      "Bash(reg query \"HKLM\\\\SOFTWARE\\\\McNeel\\\\Rhinoceros\\\\SDK\\\\8.0\" /v InstallPath)",
+      "Bash(reg query \"HKLM\\\\SOFTWARE\\\\McNeel\" /s)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"c:/Users/rswhi/OneDrive/Documents/GitHub/obliq/Obliq.vcxproj\" -p:Configuration=Release -p:Platform=x64 -p:RhinoSdkPath=\"C:\\\\Program Files\\\\Rhino 8 SDK\\\\\" -v:m)",
+      "Bash(node --version)",
+      "Bash(python3 -c \":*)",
+      "Bash(where python3.exe)",
+      "Bash(ls /c/Users/rswhi/AppData/Local/Programs/Python/*/python.exe)",
+      "Bash(ls /c/Python*/python.exe)"
+    ]
+  }
+}
