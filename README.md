@@ -1,9 +1,9 @@
+> **This is a fork of [criticalsoftware-lab/obliq](https://github.com/criticalsoftware-lab/obliq).** The original military oblique viewport and Make2D commands were built by Critical Software Lab. This fork extends that work with cavalier oblique projection support (selectable elevation plane, angle, and scale).
+
 # obliq_II
 Obliq_II plug-in for Rhinoceros®. Provides utilities for working with oblique (military, cabinet, etc...) projections in a non-destructive way.
 
 ![Project Screenshot](screenshot.PNG)
-
-> **This is a fork of [criticalsoftware-lab/obliq](https://github.com/criticalsoftware-lab/obliq).** The original military oblique viewport and Make2D commands were built by Critical Software Lab. This fork extends that work with cavalier oblique projection support (selectable elevation plane, angle, and scale).
 
 # Installation (windows)
 1. Download `Obliq.rhp` from the [latest release](https://github.com/rswhitby/obliq/releases/tag/v0.3.0-beta)
