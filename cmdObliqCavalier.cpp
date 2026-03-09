@@ -14,6 +14,7 @@
 #include "stdafx.h"
 #include "ObliqPlugIn.h"
 #include "ObliqueConduit.h"
+#include "ObliqueHiddenLine.h"
 
 #pragma region ObliqCavalier command
 
@@ -34,11 +35,11 @@ struct CavalierPlane
 
 static const CavalierPlane s_planes[] =
 {
-    //         name       cam_offset      look_dir        screen_right
-    { L"Front", { 0,-1, 0}, { 0, 1, 0}, { 1, 0, 0} },
-    { L"Right", { 1, 0, 0}, {-1, 0, 0}, { 0, 1, 0} },
-    { L"Back",  { 0, 1, 0}, { 0,-1, 0}, {-1, 0, 0} },
-    { L"Left",  {-1, 0, 0}, { 1, 0, 0}, { 0,-1, 0} },
+    //         name       cam_offset                  look_dir                   screen_right
+    { L"Front", ON_3dVector( 0,-1, 0), ON_3dVector( 0, 1, 0), ON_3dVector( 1, 0, 0) },
+    { L"Right", ON_3dVector( 1, 0, 0), ON_3dVector(-1, 0, 0), ON_3dVector( 0, 1, 0) },
+    { L"Back",  ON_3dVector( 0, 1, 0), ON_3dVector( 0,-1, 0), ON_3dVector(-1, 0, 0) },
+    { L"Left",  ON_3dVector(-1, 0, 0), ON_3dVector( 1, 0, 0), ON_3dVector( 0,-1, 0) },
 };
 static const int s_plane_count = 4;
 
@@ -256,6 +257,242 @@ CRhinoCommand::result CCommandObliqCavalier::RunCommand(const CRhinoCommandConte
         L"ObliqCavalier: Created \"%ls\" (plane=%ls angle=%.1f scale=%.2f)\n",
         static_cast<const wchar_t*>(view_name),
         plane.name, angle_deg, scale);
+
+    return CRhinoCommand::success;
+}
+
+#pragma endregion
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CavalierMake2D command
+//
+// Runs the hidden-line engine using a combined R * T_shear transform so the
+// engine's coordinate space always has screen = XY and depth = Z (higher Z =
+// closer to camera), regardless of which elevation plane is chosen.
+//
+// Reorientation matrix R:
+//   row 0 = screen_right   → engine +X
+//   row 1 = screen_up(+Z)  → engine +Y
+//   row 2 = -look_dir      → engine +Z  (closer to camera)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#pragma region CavalierMake2D command
+
+static ON_Xform BuildReorientation(
+    const ON_3dVector& screen_right,
+    const ON_3dVector& screen_up,
+    const ON_3dVector& look_dir)
+{
+    ON_Xform R = ON_Xform::IdentityTransformation;
+    R.m_xform[0][0] =  screen_right.x;  R.m_xform[0][1] =  screen_right.y;  R.m_xform[0][2] =  screen_right.z;
+    R.m_xform[1][0] =  screen_up.x;     R.m_xform[1][1] =  screen_up.y;     R.m_xform[1][2] =  screen_up.z;
+    R.m_xform[2][0] = -look_dir.x;      R.m_xform[2][1] = -look_dir.y;      R.m_xform[2][2] = -look_dir.z;
+    return R;
+}
+
+static int CavFindOrCreateLayer(CRhinoDoc* doc, const wchar_t* name, COLORREF color)
+{
+    int idx = doc->m_layer_table.FindLayerFromName(name, false, false, -1, -1);
+    if (idx >= 0) return idx;
+    ON_Layer layer;
+    layer.SetName(name);
+    layer.SetColor(color);
+    return doc->m_layer_table.AddLayer(layer);
+}
+
+class CCommandCavalierMake2D : public CRhinoCommand
+{
+public:
+    CCommandCavalierMake2D() = default;
+    ~CCommandCavalierMake2D() = default;
+
+    UUID CommandUUID() override
+    {
+        // {B2D4F6E8-1A3C-4D5E-9078-FEDCBA987654}
+        static const GUID uuid =
+        { 0xb2d4f6e8, 0x1a3c, 0x4d5e, { 0x90, 0x78, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54 } };
+        return uuid;
+    }
+
+    const wchar_t* EnglishCommandName() override { return L"CavalierMake2D"; }
+
+    CRhinoCommand::result RunCommand(const CRhinoCommandContext& context) override;
+};
+
+static class CCommandCavalierMake2D theCavalierMake2DCommand;
+
+CRhinoCommand::result CCommandCavalierMake2D::RunCommand(const CRhinoCommandContext& context)
+{
+    CRhinoDoc* doc = context.Document();
+    if (!doc)
+        return CRhinoCommand::failure;
+
+    // ── 1. Options (same as ObliqCavalier) ────────────────────────────────
+    int    plane_idx = 0;
+    double angle_deg = 45.0;
+    double scale     = 1.0;
+
+    CRhinoGetOption getOpt;
+    getOpt.SetCommandPrompt(L"Cavalier Make2D options. Press Enter to compute");
+    getOpt.AcceptNothing(true);
+
+    for (;;)
+    {
+        getOpt.ClearCommandOptions();
+
+        ON_wString angle_str, scale_str;
+        angle_str.Format(L"%.1f", angle_deg);
+        scale_str.Format(L"%.2f", scale);
+
+        int ix_plane = getOpt.AddCommandOption(RHCMDOPTNAME(L"Plane"), RHCMDOPTVALUE(s_planes[plane_idx].name));
+        int ix_angle = getOpt.AddCommandOption(RHCMDOPTNAME(L"Angle"), RHCMDOPTVALUE(angle_str));
+        int ix_scale = getOpt.AddCommandOption(RHCMDOPTNAME(L"Scale"), RHCMDOPTVALUE(scale_str));
+
+        CRhinoGet::result res = getOpt.GetOption();
+        if (res == CRhinoGet::nothing) break;
+        if (res == CRhinoGet::cancel)  return CRhinoCommand::cancel;
+
+        if (res == CRhinoGet::option)
+        {
+            const CRhinoCommandOption* opt = getOpt.Option();
+            if (!opt) continue;
+
+            if (opt->m_option_index == ix_plane)
+            {
+                CRhinoGetOption gp;
+                gp.SetCommandPrompt(L"Select elevation plane");
+                gp.AcceptNothing(true);
+                int ix[4];
+                ix[0] = gp.AddCommandOption(RHCMDOPTNAME(L"Front"), RHCMDOPTVALUE(L""));
+                ix[1] = gp.AddCommandOption(RHCMDOPTNAME(L"Right"), RHCMDOPTVALUE(L""));
+                ix[2] = gp.AddCommandOption(RHCMDOPTNAME(L"Back"),  RHCMDOPTVALUE(L""));
+                ix[3] = gp.AddCommandOption(RHCMDOPTNAME(L"Left"),  RHCMDOPTVALUE(L""));
+                if (gp.GetOption() == CRhinoGet::option)
+                {
+                    int oi = gp.Option()->m_option_index;
+                    for (int i = 0; i < s_plane_count; i++)
+                        if (oi == ix[i]) { plane_idx = i; break; }
+                }
+            }
+            else if (opt->m_option_index == ix_angle)
+            {
+                CRhinoGetNumber gn;
+                gn.SetCommandPrompt(L"Receding angle in degrees");
+                gn.SetDefaultNumber(angle_deg);
+                gn.SetLowerLimit(0.0, false);
+                gn.SetUpperLimit(360.0, false);
+                if (gn.GetNumber() == CRhinoGet::number)
+                    angle_deg = gn.Number();
+            }
+            else if (opt->m_option_index == ix_scale)
+            {
+                CRhinoGetNumber gn;
+                gn.SetCommandPrompt(L"Receding scale (1.0=cavalier, 0.5=cabinet)");
+                gn.SetDefaultNumber(scale);
+                gn.SetLowerLimit(0.001, false);
+                gn.SetUpperLimit(10.0, false);
+                if (gn.GetNumber() == CRhinoGet::number)
+                    scale = gn.Number();
+            }
+            continue;
+        }
+        break;
+    }
+
+    // ── 2. Build combined engine transform: R * T_shear ────────────────────
+    // R reorients so engine XY = screen plane, engine Z = depth (higher = closer).
+    // The existing CObliqueHiddenLineEngine then works unchanged.
+    static const ON_3dVector screen_up(0.0, 0.0, 1.0);
+    const CavalierPlane& plane = s_planes[plane_idx];
+
+    ON_Xform T_shear = BuildCavalierShear(plane.look_dir, plane.screen_right, angle_deg, scale);
+    ON_Xform R       = BuildReorientation(plane.screen_right, screen_up, plane.look_dir);
+    ON_Xform engine_xform = R * T_shear;
+
+    // ── 3. Run hidden-line engine ──────────────────────────────────────────
+    RhinoApp().Print(L"CavalierMake2D: Collecting geometry...\n");
+
+    CObliqueHiddenLineEngine hld;
+    hld.SetTransform(engine_xform);
+    hld.SetSampleDensity(128);
+    hld.SetDepthTolerance(1e-3);
+    hld.SetEdgeAngleThreshold(9.0);
+    hld.AddObjectsFromDoc(doc);
+
+    RhinoApp().Print(L"CavalierMake2D: Computing hidden lines...\n");
+
+    if (!hld.Compute())
+    {
+        RhinoApp().Print(L"CavalierMake2D: Computation failed.\n");
+        return CRhinoCommand::failure;
+    }
+
+    int total = hld.ResultCount();
+    if (total == 0)
+    {
+        RhinoApp().Print(L"CavalierMake2D: No edges found.\n");
+        return CRhinoCommand::nothing;
+    }
+
+    // ── 4. Output layers ───────────────────────────────────────────────────
+    ON_wString layer_base;
+    layer_base.Format(L"CavalierMake2D::%ls%.0f_%.2f", plane.name, angle_deg, scale);
+
+    ON_wString vis_name = layer_base + L"::Visible";
+    ON_wString hid_name = layer_base + L"::Hidden";
+
+    int layer_visible = CavFindOrCreateLayer(doc, vis_name, RGB(0, 0, 0));
+    int layer_hidden  = CavFindOrCreateLayer(doc, hid_name, RGB(128, 128, 128));
+
+    // ── 5. Add result curves ───────────────────────────────────────────────
+    ON_SimpleArray<CClassifiedSegment> results;
+    hld.DetachResults(results);
+
+    // Flatten to Z=0 in engine space (engine XY = screen plane)
+    ON_Xform flatten = ON_Xform::IdentityTransformation;
+    flatten.m_xform[2][2] = 0.0;
+
+    int count_vis = 0, count_hid = 0;
+
+    for (int i = 0; i < results.Count(); i++)
+    {
+        CClassifiedSegment& seg = results[i];
+        if (!seg.m_curve) continue;
+
+        seg.m_curve->Transform(flatten);
+
+        ON_3dmObjectAttributes attrs;
+        attrs.m_uuid = ON_nil_uuid;
+
+        if (seg.m_visibility == EHiddenLineVisibility::Visible)
+        {
+            attrs.m_layer_index = layer_visible;
+            attrs.m_color = RGB(0, 0, 0);
+            count_vis++;
+        }
+        else
+        {
+            attrs.m_layer_index = layer_hidden;
+            attrs.m_color = RGB(128, 128, 128);
+            int dash_idx = doc->m_linetype_table.FindLinePatternFromName(L"Dashed", true, -1);
+            if (dash_idx >= 0)
+                attrs.m_linetype_index = dash_idx;
+            count_hid++;
+        }
+
+        attrs.SetColorSource(ON::color_from_object);
+        attrs.SetLinetypeSource(ON::linetype_from_object);
+
+        doc->AddCurveObject(*seg.m_curve, &attrs);
+        delete seg.m_curve;
+        seg.m_curve = nullptr;
+    }
+
+    doc->Redraw();
+
+    RhinoApp().Print(
+        L"CavalierMake2D: Done - %d visible, %d hidden segments (plane=%ls angle=%.1f scale=%.2f)\n",
+        count_vis, count_hid, plane.name, angle_deg, scale);
 
     return CRhinoCommand::success;
 }

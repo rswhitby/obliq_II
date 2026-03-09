@@ -12,8 +12,19 @@ Obliq plug-in for Rhinoceros®. Provides utilities for working with oblique (mil
 # Usage
 **Commands:**
 
-**Obliq** -> Creates new custom viewport that displays a perfect oblique projection aligned on the Z axis. Also known as a "military" projection or plan oblique.
+**Obliq** → Creates a floating viewport showing a military (plan) oblique projection. The camera looks straight down (-Z) and height is sheared diagonally into the view.
 
-**ObliqueMake2D** -> Generates a flat, 2D hidden-line drawing of the selected items (might take some time, depending on the amount of geometry).
+**ObliqueMake2D** → Generates a flat 2D hidden-line drawing of all scene geometry using the military oblique projection. Outputs visible and hidden curves to dedicated layers. May take some time depending on scene complexity.
 
-**ObliqueCurveMake2D** -> Takes a selection of curves and applies an oblique projection, flattening them onto the CPlane.
+**ObliqueCurveMake2D** → Takes a selection of curves and projects them through the oblique shear, flattening them onto Z=0 as new geometry. Supports Angle and Scale options.
+
+---
+
+**ObliqCavalier** → Creates a floating viewport showing a cavalier oblique projection. Unlike the military oblique, you choose which world face is the elevation plane (Front, Right, Back, or Left). The elevation plane is displayed true-shape and depth recedes at the specified angle and scale.
+
+Options:
+- `Plane` — elevation face: Front / Right / Back / Left
+- `Angle` — angle of receding lines in degrees (default 45°)
+- `Scale` — depth scale factor: 1.0 = cavalier (full depth), 0.5 = cabinet (half depth)
+
+**CavalierMake2D** → Generates a flat 2D hidden-line drawing using the cavalier oblique projection. Uses the same Plane, Angle, and Scale options as ObliqCavalier. Outputs visible (black) and hidden (grey, dashed) curves to named layers. The output curves lie in the chosen elevation plane.
