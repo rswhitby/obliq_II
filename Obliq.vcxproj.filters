@@ -27,6 +27,9 @@
     <ClCompile Include="cmdObliq.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cmdObliqCavalier.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="cmdObliqueMake2D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

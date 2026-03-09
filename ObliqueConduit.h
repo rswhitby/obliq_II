@@ -148,3 +148,107 @@ private:
     int      m_pushCount;
     ON_UUID  m_viewport_id;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CCavalierConduit
+// Display conduit for cavalier / cabinet oblique projections.
+// Accepts an externally computed shear matrix so any elevation plane works.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CCavalierConduit : public CRhinoDisplayConduit
+{
+public:
+    CCavalierConduit()
+        : CRhinoDisplayConduit(
+            CSupportChannels::SC_CALCBOUNDINGBOX |
+            CSupportChannels::SC_PREDRAWOBJECTS  |
+            CSupportChannels::SC_DRAWOBJECT      |
+            CSupportChannels::SC_POSTDRAWOBJECTS |
+            CSupportChannels::SC_DRAWFOREGROUND  |
+            CSupportChannels::SC_DRAWOVERLAY)
+        , m_pushCount(0)
+        , m_viewport_id(ON_nil_uuid)
+    {
+        m_shear = ON_Xform::IdentityTransformation;
+    }
+
+    void SetShearMatrix(const ON_Xform& xform) { m_shear = xform; }
+    void SetViewportId(ON_UUID id)              { m_viewport_id = id; }
+
+    bool ExecConduit(CRhinoDisplayPipeline& dp, UINT nChannel, bool& bTerminate) override
+    {
+        if (ON_UuidCompare(m_viewport_id, ON_nil_uuid) != 0)
+        {
+            const CRhinoViewport* vp = dp.GetRhinoVP();
+            if (vp && ON_UuidCompare(vp->ViewportId(), m_viewport_id) != 0)
+                return true;
+        }
+
+        switch (nChannel)
+        {
+        case CSupportChannels::SC_CALCBOUNDINGBOX:
+        {
+            ON_BoundingBox bbox = m_pChannelAttrs->m_BoundingBox;
+            if (bbox.IsValid())
+            {
+                ON_BoundingBox sheared;
+                for (int i = 0; i < 8; i++)
+                {
+                    ON_3dPoint c = bbox.Corner(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+                    ON_3dPoint s = m_shear * c;
+                    if (i == 0) sheared.Set(s, true);
+                    else        sheared.Set(s, false);
+                }
+                m_pChannelAttrs->m_BoundingBox.Union(sheared);
+            }
+            break;
+        }
+
+        case CSupportChannels::SC_PREDRAWOBJECTS:
+            dp.PushModelTransform(m_shear);
+            m_pushCount++;
+            break;
+
+        case CSupportChannels::SC_DRAWOBJECT:
+            if (m_pushCount == 0)
+            {
+                dp.PushModelTransform(m_shear);
+                m_pushCount++;
+            }
+            break;
+
+        case CSupportChannels::SC_POSTDRAWOBJECTS:
+            if (m_pushCount > 0) { dp.PopModelTransform(); m_pushCount--; }
+            break;
+
+        case CSupportChannels::SC_DRAWFOREGROUND:
+            dp.PushModelTransform(m_shear);
+            m_pushCount++;
+            break;
+
+        case CSupportChannels::SC_DRAWOVERLAY:
+            if (m_pushCount > 0) { dp.PopModelTransform(); m_pushCount--; }
+            dp.PushModelTransform(m_shear);
+            m_pushCount++;
+            break;
+        }
+        return true;
+    }
+
+    void NotifyConduit(EConduitNotifiers notify, CRhinoDisplayPipeline& dp) override
+    {
+        if (notify == CN_PIPELINECLOSED || notify == CN_FRAMESIZECHANGED)
+        {
+            while (m_pushCount > 0)
+            {
+                dp.PopModelTransform();
+                m_pushCount--;
+            }
+        }
+    }
+
+private:
+    ON_Xform m_shear;
+    int      m_pushCount;
+    ON_UUID  m_viewport_id;
+};

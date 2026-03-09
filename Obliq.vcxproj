@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cmdObliq.cpp" />
+    <ClCompile Include="cmdObliqCavalier.cpp" />
     <ClCompile Include="cmdObliqueCurveMake2D.cpp" />
     <ClCompile Include="cmdObliqueMake2D.cpp" />
     <ClCompile Include="ObliqApp.cpp" />
