@@ -1,5 +1,5 @@
-# obliq
-Obliq plug-in for Rhinoceros®. Provides utilities for working with oblique (military, cabinet, etc...) projections in a non-destructive way.
+# obliq_II
+Obliq_II plug-in for Rhinoceros®. Provides utilities for working with oblique (military, cabinet, etc...) projections in a non-destructive way.
 
 ![Project Screenshot](screenshot.PNG)
 
